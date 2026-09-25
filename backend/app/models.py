@@ -1,4 +1,4 @@
-from datetime import date, datetime
+import datetime
 
 from sqlalchemy import Date, DateTime, Float, String
 from sqlalchemy.orm import Mapped, mapped_column
@@ -11,7 +11,7 @@ class Transaction(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
-    date: Mapped[date] = mapped_column(Date)
+    date: Mapped[datetime.date] = mapped_column(Date)
 
     amount: Mapped[float] = mapped_column(Float)
 
@@ -24,7 +24,9 @@ class Transaction(Base):
         nullable=True,
     )
 
-    created_at: Mapped[datetime] = mapped_column(
+    created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow,
+        default=lambda: datetime.datetime.now(
+            datetime.UTC
+        ).replace(tzinfo=None),
     )

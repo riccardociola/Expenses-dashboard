@@ -82,3 +82,33 @@ def delete_transaction(
 
     db.delete(transaction)
     db.commit()
+
+
+@app.put(
+    "/transactions/{transaction_id}",
+    response_model=schemas.TransactionRead,
+)
+def update_transaction(
+    transaction_id: int,
+    updated_transaction: schemas.TransactionCreate,
+    db: Session = Depends(get_db),
+):
+    transaction = (
+        db.query(models.Transaction)
+        .filter(models.Transaction.id == transaction_id)
+        .first()
+    )
+
+    if transaction is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Transaction not found",
+        )
+
+    for field, value in updated_transaction.model_dump().items():
+        setattr(transaction, field, value)
+
+    db.commit()
+    db.refresh(transaction)
+
+    return transaction
