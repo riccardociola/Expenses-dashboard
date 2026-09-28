@@ -4,6 +4,8 @@ from fastapi import Depends, FastAPI, HTTPException, Query, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from collections import defaultdict
+
 from . import models, schemas
 from .database import Base, engine, get_db
 
@@ -38,6 +40,29 @@ def root():
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
+
+
+def shift_month(
+    date: datetime.date,
+    months: int,
+) -> datetime.date:
+    month_index = (
+        date.year * 12
+        + date.month
+        - 1
+        + months
+    )
+
+    year, month = divmod(
+        month_index,
+        12,
+    )
+
+    return datetime.date(
+        year,
+        month + 1,
+        1,
+    )
 
 
 @app.post(
@@ -224,3 +249,181 @@ def get_category_report(
         }
         for category, amount in categories
     ]
+
+
+@app.get(
+    "/reports/spending-insight",
+    response_model=schemas.SpendingInsight,
+)
+def get_spending_insight(
+    year: int,
+    month: int = Query(ge=1, le=12),
+    db: Session = Depends(get_db),
+):
+    current_start = datetime.date(
+        year,
+        month,
+        1,
+    )
+
+    current_end = shift_month(
+        current_start,
+        1,
+    )
+
+    history_start = shift_month(
+        current_start,
+        -6,
+    )
+
+
+    # -----------------------------
+    # Current month
+    # -----------------------------
+
+    current_rows = (
+        db.query(
+            models.Transaction.date,
+            models.Transaction.category,
+            models.Transaction.amount,
+        )
+        .filter(
+            models.Transaction.date >= current_start,
+            models.Transaction.date < current_end,
+            models.Transaction.transaction_type == "expense",
+        )
+        .all()
+    )
+
+
+    current_total = 0.0
+    current_categories = defaultdict(float)
+
+    for _, category, amount in current_rows:
+        amount = float(amount)
+
+        current_total += amount
+        current_categories[category] += amount
+
+
+    # -----------------------------
+    # Previous six months
+    # -----------------------------
+
+    history_rows = (
+        db.query(
+            models.Transaction.date,
+            models.Transaction.category,
+            models.Transaction.amount,
+        )
+        .filter(
+            models.Transaction.date >= history_start,
+            models.Transaction.date < current_start,
+            models.Transaction.transaction_type == "expense",
+        )
+        .all()
+    )
+
+
+    monthly_totals = {
+        (
+            shift_month(
+                current_start,
+                -i,
+            ).year,
+            shift_month(
+                current_start,
+                -i,
+            ).month,
+        ): 0.0
+        for i in range(1, 7)
+    }
+
+
+    history_categories = defaultdict(float)
+
+
+    for transaction_date, category, amount in history_rows:
+        amount = float(amount)
+
+        key = (
+            transaction_date.year,
+            transaction_date.month,
+        )
+
+        monthly_totals[key] += amount
+
+        history_categories[category] += amount
+
+
+    six_month_average = (
+        sum(monthly_totals.values())
+        / 6
+    )
+
+
+    difference = (
+        current_total
+        - six_month_average
+    )
+
+
+    difference_percentage = (
+        difference
+        / six_month_average
+        * 100
+        if six_month_average > 0
+        else None
+    )
+
+
+    # -----------------------------
+    # Category comparison
+    # -----------------------------
+
+    category_names = (
+        set(current_categories)
+        | set(history_categories)
+    )
+
+
+    categories = [
+        {
+            "category": category,
+            "current": current_categories[
+                category
+            ],
+            "average": (
+                history_categories[
+                    category
+                ]
+                / 6
+            ),
+        }
+        for category in category_names
+    ]
+
+
+    categories.sort(
+        key=lambda item:
+            item["current"],
+        reverse=True,
+    )
+
+
+    return {
+        "current_expenses":
+            current_total,
+
+        "six_month_average":
+            six_month_average,
+
+        "difference":
+            difference,
+
+        "difference_percentage":
+            difference_percentage,
+
+        "categories":
+            categories,
+    }

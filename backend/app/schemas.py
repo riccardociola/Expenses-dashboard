@@ -31,3 +31,17 @@ class MonthlyReport(BaseModel):
 class CategoryReport(BaseModel):
     category: str
     amount: float
+
+
+class CategorySpendingInsight(BaseModel):
+    category: str
+    current: float
+    average: float
+
+
+class SpendingInsight(BaseModel):
+    current_expenses: float
+    six_month_average: float
+    difference: float
+    difference_percentage: float | None
+    categories: list[CategorySpendingInsight]
