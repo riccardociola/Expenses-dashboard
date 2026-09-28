@@ -17,3 +17,17 @@ class TransactionRead(TransactionCreate):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class MonthlyReport(BaseModel):
+    year: int
+    month: int
+    income: float
+    expenses: float
+    net_cash_flow: float
+    savings_rate: float | None
+
+
+class CategoryReport(BaseModel):
+    category: str
+    amount: float
