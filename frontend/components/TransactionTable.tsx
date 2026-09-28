@@ -1,5 +1,7 @@
 "use client";
 
+import { formatAmount } from "@/lib/format";
+
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -14,14 +16,6 @@ import { Transaction } from "@/types/transaction";
 type TransactionTableProps = {
   transactions: Transaction[];
 };
-
-
-function formatCurrency(amount: number) {
-  return new Intl.NumberFormat("en-IE", {
-    style: "currency",
-    currency: "EUR",
-  }).format(amount);
-}
 
 
 function formatDate(date: string) {
@@ -424,11 +418,12 @@ export default function TransactionTable({
                         : "text-gray-900"
                     }`}
                   >
-                    {transaction.transaction_type === "income"
+                    {formatAmount(
+                      transaction.amount,
+                      transaction.transaction_type === "income"
                       ? "+"
-                      : "−"}
-
-                    {formatCurrency(transaction.amount)}
+                      : "-",
+        )}
                   </td>
 
 
