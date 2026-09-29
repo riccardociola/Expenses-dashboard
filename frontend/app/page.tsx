@@ -5,6 +5,8 @@ import SpendingInsight from "@/components/SpendingInsight";
 import SummaryCards from "@/components/SummaryCards";
 import TransactionTable from "@/components/TransactionTable";
 
+import Link from "next/link";
+
 import {
   getCategoryReport,
   getMonthlyReport,
@@ -24,7 +26,6 @@ type HomeProps = {
 export default async function Home({
   searchParams,
 }: HomeProps) {
-
   const params = await searchParams;
 
 
@@ -48,7 +49,9 @@ export default async function Home({
           transaction.date.slice(0, 7),
       ),
     ),
-  ).sort().reverse();
+  )
+    .sort()
+    .reverse();
 
 
   const availableMonths =
@@ -202,12 +205,8 @@ export default async function Home({
 
             <MonthSelector
               months={availableMonths}
-              selectedYear={
-                selectedYear
-              }
-              selectedMonth={
-                selectedMonth
-              }
+              selectedYear={selectedYear}
+              selectedMonth={selectedMonth}
             />
 
 
@@ -218,7 +217,31 @@ export default async function Home({
           </div>
 
 
-          <AddTransaction />
+          <div className="flex items-center gap-3">
+
+            <Link
+              href="/insights"
+              className="
+                rounded-lg
+                border
+                border-gray-300
+                bg-white
+                px-4
+                py-2.5
+                text-sm
+                font-medium
+                text-gray-700
+                transition
+                hover:bg-gray-50
+              "
+            >
+              Insights
+            </Link>
+
+
+            <AddTransaction />
+
+          </div>
 
         </div>
 
@@ -228,9 +251,7 @@ export default async function Home({
         <div className="mb-8">
 
           <SummaryCards
-            report={
-              monthlyReport
-            }
+            report={monthlyReport}
           />
 
         </div>
@@ -249,19 +270,13 @@ export default async function Home({
         >
 
           <CategoryChart
-            data={
-              categoryReport
-            }
-            income={
-              monthlyReport.income
-            }
+            data={categoryReport}
+            income={monthlyReport.income}
           />
 
 
           <SpendingInsight
-            insight={
-              spendingInsight
-            }
+            insight={spendingInsight}
           />
 
         </div>
@@ -270,9 +285,7 @@ export default async function Home({
         {/* Selected month's transactions */}
 
         <TransactionTable
-          transactions={
-            transactions
-          }
+          transactions={transactions}
         />
 
       </div>

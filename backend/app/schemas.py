@@ -4,10 +4,18 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 
+TransactionType = Literal[
+    "expense",
+    "income",
+    "investment",
+    "reimbursable",
+]
+
+
 class TransactionCreate(BaseModel):
     date: date
     amount: float = Field(gt=0)
-    transaction_type: Literal["expense", "income"]
+    transaction_type: TransactionType
     category: str
     description: str | None = None
 
@@ -45,3 +53,29 @@ class SpendingInsight(BaseModel):
     difference: float
     difference_percentage: float | None
     categories: list[CategorySpendingInsight]
+
+
+class YearlyMonthReport(BaseModel):
+    month: int
+    income: float
+    expenses: float
+    net_cash_flow: float
+    investments: float
+
+
+class YearlyCategoryReport(BaseModel):
+    category: str
+    amount: float
+
+
+class YearlyReport(BaseModel):
+    year: int
+
+    income: float
+    expenses: float
+    net_cash_flow: float
+    savings_rate: float | None
+    investments: float
+
+    months: list[YearlyMonthReport]
+    categories: list[YearlyCategoryReport]

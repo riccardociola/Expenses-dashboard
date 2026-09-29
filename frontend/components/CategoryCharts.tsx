@@ -263,10 +263,6 @@ export default function CategoryChart({
           Monthly spending
         </h2>
 
-        <p className="text-sm text-gray-500">
-          Distribution of expenses and savings
-        </p>
-
       </div>
 
 

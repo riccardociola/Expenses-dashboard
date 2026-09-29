@@ -587,10 +587,6 @@ export default function TransactionTable({
             Transactions
           </h2>
 
-          <p className="text-sm text-gray-500">
-            Your latest income and expenses
-          </p>
-
         </div>
 
 

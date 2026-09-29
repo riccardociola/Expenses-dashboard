@@ -28,3 +28,32 @@ export type SpendingInsight = {
   difference_percentage: number | null;
   categories: CategorySpendingInsight[];
 };
+
+
+export type YearlyMonthReport = {
+  month: number;
+  income: number;
+  expenses: number;
+  net_cash_flow: number;
+  investments: number;
+};
+
+
+export type YearlyCategoryReport = {
+  category: string;
+  amount: number;
+};
+
+
+export type YearlyReport = {
+  year: number;
+
+  income: number;
+  expenses: number;
+  net_cash_flow: number;
+  savings_rate: number | null;
+  investments: number;
+
+  months: YearlyMonthReport[];
+  categories: YearlyCategoryReport[];
+};

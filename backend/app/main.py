@@ -1,24 +1,53 @@
 import datetime
 
-from fastapi import Depends, FastAPI, HTTPException, Query, status
-from sqlalchemy import func
-from sqlalchemy.orm import Session
-
 from collections import defaultdict
 
-from . import models, schemas
-from .database import Base, engine, get_db
+from fastapi import (
+    Depends,
+    FastAPI,
+    HTTPException,
+    Query,
+    status,
+)
 
 from fastapi.middleware.cors import CORSMiddleware
 
+from sqlalchemy import func
+from sqlalchemy.orm import Session
 
-Base.metadata.create_all(bind=engine)
+from . import models, schemas
 
+from .database import (
+    Base,
+    engine,
+    get_db,
+)
+
+
+# ============================================================
+# Database
+# ============================================================
+
+Base.metadata.create_all(
+    bind=engine,
+)
+
+
+# ============================================================
+# FastAPI app
+# ============================================================
 
 app = FastAPI(
     title="Expenses Dashboard API",
-    version="0.1.0",
 )
+
+
+# ============================================================
+# CORS
+#
+# Allows the Next.js frontend running on port 3000
+# to communicate with FastAPI running on port 8000.
+# ============================================================
 
 app.add_middleware(
     CORSMiddleware,
@@ -32,23 +61,24 @@ app.add_middleware(
 )
 
 
-@app.get("/")
-def root():
-    return {"message": "Expenses Dashboard API is running"}
-
-
-@app.get("/health")
-def health_check():
-    return {"status": "ok"}
-
+# ============================================================
+# Helpers
+# ============================================================
 
 def shift_month(
-    date: datetime.date,
+    value: datetime.date,
     months: int,
 ) -> datetime.date:
+    """
+    Move a date by a whole number of months.
+
+    The returned date is always the first
+    day of the resulting month.
+    """
+
     month_index = (
-        date.year * 12
-        + date.month
+        value.year * 12
+        + value.month
         - 1
         + months
     )
@@ -65,6 +95,60 @@ def shift_month(
     )
 
 
+def month_bounds(
+    year: int,
+    month: int,
+) -> tuple[
+    datetime.date,
+    datetime.date,
+]:
+    """
+    Return:
+
+        first day of selected month
+        first day of following month
+    """
+
+    start_date = datetime.date(
+        year,
+        month,
+        1,
+    )
+
+    end_date = shift_month(
+        start_date,
+        1,
+    )
+
+    return (
+        start_date,
+        end_date,
+    )
+
+
+# ============================================================
+# Basic endpoints
+# ============================================================
+
+@app.get("/")
+def root():
+    return {
+        "message":
+            "Expenses Dashboard API",
+    }
+
+
+@app.get("/health")
+def health():
+    return {
+        "status": "ok",
+    }
+
+
+# ============================================================
+# Transactions
+# ============================================================
+
 @app.post(
     "/transactions",
     response_model=schemas.TransactionRead,
@@ -74,31 +158,97 @@ def create_transaction(
     transaction: schemas.TransactionCreate,
     db: Session = Depends(get_db),
 ):
-    new_transaction = models.Transaction(
-        **transaction.model_dump()
+    new_transaction = (
+        models.Transaction(
+            **transaction.model_dump(),
+        )
     )
 
-    db.add(new_transaction)
+    db.add(
+        new_transaction
+    )
+
     db.commit()
-    db.refresh(new_transaction)
+
+    db.refresh(
+        new_transaction
+    )
 
     return new_transaction
 
 
 @app.get(
     "/transactions",
-    response_model=list[schemas.TransactionRead],
+    response_model=list[
+        schemas.TransactionRead
+    ],
 )
 def get_transactions(
     db: Session = Depends(get_db),
 ):
-    transactions = (
-        db.query(models.Transaction)
-        .order_by(models.Transaction.date.desc())
+    return (
+        db.query(
+            models.Transaction
+        )
+        .order_by(
+            models.Transaction.date.desc()
+        )
         .all()
     )
 
-    return transactions
+
+@app.put(
+    "/transactions/{transaction_id}",
+    response_model=schemas.TransactionRead,
+)
+def update_transaction(
+    transaction_id: int,
+    updated_transaction:
+        schemas.TransactionCreate,
+    db: Session = Depends(get_db),
+):
+    transaction = (
+        db.query(
+            models.Transaction
+        )
+        .filter(
+            models.Transaction.id
+            == transaction_id
+        )
+        .first()
+    )
+
+    if transaction is None:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "Transaction not found"
+            ),
+        )
+
+
+    for (
+        field,
+        value,
+    ) in (
+        updated_transaction
+        .model_dump()
+        .items()
+    ):
+        setattr(
+            transaction,
+            field,
+            value,
+        )
+
+
+    db.commit()
+
+    db.refresh(
+        transaction
+    )
+
+    return transaction
 
 
 @app.delete(
@@ -110,50 +260,38 @@ def delete_transaction(
     db: Session = Depends(get_db),
 ):
     transaction = (
-        db.query(models.Transaction)
-        .filter(models.Transaction.id == transaction_id)
+        db.query(
+            models.Transaction
+        )
+        .filter(
+            models.Transaction.id
+            == transaction_id
+        )
         .first()
     )
 
+
     if transaction is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Transaction not found",
+            status_code=404,
+            detail=(
+                "Transaction not found"
+            ),
         )
 
-    db.delete(transaction)
-    db.commit()
 
-
-@app.put(
-    "/transactions/{transaction_id}",
-    response_model=schemas.TransactionRead,
-)
-def update_transaction(
-    transaction_id: int,
-    updated_transaction: schemas.TransactionCreate,
-    db: Session = Depends(get_db),
-):
-    transaction = (
-        db.query(models.Transaction)
-        .filter(models.Transaction.id == transaction_id)
-        .first()
+    db.delete(
+        transaction
     )
 
-    if transaction is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Transaction not found",
-        )
-
-    for field, value in updated_transaction.model_dump().items():
-        setattr(transaction, field, value)
-
     db.commit()
-    db.refresh(transaction)
 
-    return transaction
+    return None
 
+
+# ============================================================
+# Monthly report
+# ============================================================
 
 @app.get(
     "/reports/monthly",
@@ -161,95 +299,221 @@ def update_transaction(
 )
 def get_monthly_report(
     year: int,
-    month: int = Query(ge=1, le=12),
+    month: int = Query(
+        ge=1,
+        le=12,
+    ),
     db: Session = Depends(get_db),
 ):
-    start_date = datetime.date(year, month, 1)
+    (
+        start_date,
+        end_date,
+    ) = month_bounds(
+        year,
+        month,
+    )
 
-    if month == 12:
-        end_date = datetime.date(year + 1, 1, 1)
-    else:
-        end_date = datetime.date(year, month + 1, 1)
+
+    # --------------------------------------------------------
+    # Income
+    # --------------------------------------------------------
 
     income = (
-        db.query(func.sum(models.Transaction.amount))
+        db.query(
+            func.sum(
+                models.Transaction.amount
+            )
+        )
         .filter(
-            models.Transaction.date >= start_date,
-            models.Transaction.date < end_date,
-            models.Transaction.transaction_type == "income",
+            models.Transaction.date
+            >= start_date,
+
+            models.Transaction.date
+            < end_date,
+
+            models.Transaction.transaction_type
+            == "income",
         )
         .scalar()
         or 0.0
     )
+
+
+    # --------------------------------------------------------
+    # Normal expenses only
+    #
+    # Investments and reimbursable costs are deliberately
+    # excluded.
+    # --------------------------------------------------------
 
     expenses = (
-        db.query(func.sum(models.Transaction.amount))
+        db.query(
+            func.sum(
+                models.Transaction.amount
+            )
+        )
         .filter(
-            models.Transaction.date >= start_date,
-            models.Transaction.date < end_date,
-            models.Transaction.transaction_type == "expense",
+            models.Transaction.date
+            >= start_date,
+
+            models.Transaction.date
+            < end_date,
+
+            models.Transaction.transaction_type
+            == "expense",
         )
         .scalar()
         or 0.0
     )
 
-    net_cash_flow = income - expenses
+
+    income = float(
+        income
+    )
+
+    expenses = float(
+        expenses
+    )
+
+
+    net_cash_flow = (
+        income
+        - expenses
+    )
+
 
     savings_rate = (
-        net_cash_flow / income * 100
+        net_cash_flow
+        / income
+        * 100
         if income > 0
         else None
     )
 
+
     return {
-        "year": year,
-        "month": month,
-        "income": income,
-        "expenses": expenses,
-        "net_cash_flow": net_cash_flow,
-        "savings_rate": savings_rate,
+        "year":
+            year,
+
+        "month":
+            month,
+
+        "income":
+            round(
+                income,
+                2,
+            ),
+
+        "expenses":
+            round(
+                expenses,
+                2,
+            ),
+
+        "net_cash_flow":
+            round(
+                net_cash_flow,
+                2,
+            ),
+
+        "savings_rate":
+            (
+                round(
+                    savings_rate,
+                    2,
+                )
+                if savings_rate
+                is not None
+                else None
+            ),
     }
 
 
+# ============================================================
+# Monthly category report
+# ============================================================
+
 @app.get(
     "/reports/categories",
-    response_model=list[schemas.CategoryReport],
+    response_model=list[
+        schemas.CategoryReport
+    ],
 )
 def get_category_report(
     year: int,
-    month: int = Query(ge=1, le=12),
+    month: int = Query(
+        ge=1,
+        le=12,
+    ),
     db: Session = Depends(get_db),
 ):
-    start_date = datetime.date(year, month, 1)
+    (
+        start_date,
+        end_date,
+    ) = month_bounds(
+        year,
+        month,
+    )
 
-    if month == 12:
-        end_date = datetime.date(year + 1, 1, 1)
-    else:
-        end_date = datetime.date(year, month + 1, 1)
 
     categories = (
         db.query(
             models.Transaction.category,
-            func.sum(models.Transaction.amount).label("amount"),
+
+            func.sum(
+                models.Transaction.amount
+            ).label(
+                "amount"
+            ),
         )
         .filter(
-            models.Transaction.date >= start_date,
-            models.Transaction.date < end_date,
-            models.Transaction.transaction_type == "expense",
+            models.Transaction.date
+            >= start_date,
+
+            models.Transaction.date
+            < end_date,
+
+            # Only ordinary expenses
+            models.Transaction.transaction_type
+            == "expense",
         )
-        .group_by(models.Transaction.category)
-        .order_by(func.sum(models.Transaction.amount).desc())
+        .group_by(
+            models.Transaction.category
+        )
+        .order_by(
+            func.sum(
+                models.Transaction.amount
+            ).desc()
+        )
         .all()
     )
 
+
     return [
         {
-            "category": category,
-            "amount": float(amount),
+            "category":
+                category,
+
+            "amount":
+                round(
+                    float(amount),
+                    2,
+                ),
         }
-        for category, amount in categories
+
+        for (
+            category,
+            amount,
+        ) in categories
     ]
 
+
+# ============================================================
+# Spending insight
+#
+# Compare selected month with the six complete
+# calendar months immediately before it.
+# ============================================================
 
 @app.get(
     "/reports/spending-insight",
@@ -257,13 +521,18 @@ def get_category_report(
 )
 def get_spending_insight(
     year: int,
-    month: int = Query(ge=1, le=12),
+    month: int = Query(
+        ge=1,
+        le=12,
+    ),
     db: Session = Depends(get_db),
 ):
-    current_start = datetime.date(
-        year,
-        month,
-        1,
+    current_start = (
+        datetime.date(
+            year,
+            month,
+            1,
+        )
     )
 
     current_end = shift_month(
@@ -277,9 +546,9 @@ def get_spending_insight(
     )
 
 
-    # -----------------------------
-    # Current month
-    # -----------------------------
+    # --------------------------------------------------------
+    # Current month expenses
+    # --------------------------------------------------------
 
     current_rows = (
         db.query(
@@ -288,27 +557,48 @@ def get_spending_insight(
             models.Transaction.amount,
         )
         .filter(
-            models.Transaction.date >= current_start,
-            models.Transaction.date < current_end,
-            models.Transaction.transaction_type == "expense",
+            models.Transaction.date
+            >= current_start,
+
+            models.Transaction.date
+            < current_end,
+
+            models.Transaction.transaction_type
+            == "expense",
         )
         .all()
     )
 
 
     current_total = 0.0
-    current_categories = defaultdict(float)
 
-    for _, category, amount in current_rows:
-        amount = float(amount)
-
-        current_total += amount
-        current_categories[category] += amount
+    current_categories = (
+        defaultdict(float)
+    )
 
 
-    # -----------------------------
-    # Previous six months
-    # -----------------------------
+    for (
+        _,
+        category,
+        amount,
+    ) in current_rows:
+
+        value = float(
+            amount
+        )
+
+        current_total += (
+            value
+        )
+
+        current_categories[
+            category
+        ] += value
+
+
+    # --------------------------------------------------------
+    # Previous six complete months
+    # --------------------------------------------------------
 
     history_rows = (
         db.query(
@@ -317,9 +607,14 @@ def get_spending_insight(
             models.Transaction.amount,
         )
         .filter(
-            models.Transaction.date >= history_start,
-            models.Transaction.date < current_start,
-            models.Transaction.transaction_type == "expense",
+            models.Transaction.date
+            >= history_start,
+
+            models.Transaction.date
+            < current_start,
+
+            models.Transaction.transaction_type
+            == "expense",
         )
         .all()
     )
@@ -331,33 +626,56 @@ def get_spending_insight(
                 current_start,
                 -i,
             ).year,
+
             shift_month(
                 current_start,
                 -i,
             ).month,
         ): 0.0
-        for i in range(1, 7)
+
+        for i in range(
+            1,
+            7,
+        )
     }
 
 
-    history_categories = defaultdict(float)
+    history_categories = (
+        defaultdict(float)
+    )
 
 
-    for transaction_date, category, amount in history_rows:
-        amount = float(amount)
+    for (
+        transaction_date,
+        category,
+        amount,
+    ) in history_rows:
+
+        value = float(
+            amount
+        )
+
 
         key = (
             transaction_date.year,
             transaction_date.month,
         )
 
-        monthly_totals[key] += amount
 
-        history_categories[category] += amount
+        monthly_totals[
+            key
+        ] += value
+
+
+        history_categories[
+            category
+        ] += value
 
 
     six_month_average = (
-        sum(monthly_totals.values())
+        sum(
+            monthly_totals.values()
+        )
         / 6
     )
 
@@ -377,30 +695,46 @@ def get_spending_insight(
     )
 
 
-    # -----------------------------
+    # --------------------------------------------------------
     # Category comparison
-    # -----------------------------
+    # --------------------------------------------------------
 
     category_names = (
-        set(current_categories)
-        | set(history_categories)
+        set(
+            current_categories
+        )
+        |
+        set(
+            history_categories
+        )
     )
 
 
     categories = [
         {
-            "category": category,
-            "current": current_categories[
-                category
-            ],
-            "average": (
-                history_categories[
-                    category
-                ]
-                / 6
-            ),
+            "category":
+                category,
+
+            "current":
+                round(
+                    current_categories[
+                        category
+                    ],
+                    2,
+                ),
+
+            "average":
+                round(
+                    history_categories[
+                        category
+                    ]
+                    / 6,
+                    2,
+                ),
         }
-        for category in category_names
+
+        for category
+        in category_names
     ]
 
 
@@ -413,16 +747,393 @@ def get_spending_insight(
 
     return {
         "current_expenses":
-            current_total,
+            round(
+                current_total,
+                2,
+            ),
 
         "six_month_average":
-            six_month_average,
+            round(
+                six_month_average,
+                2,
+            ),
 
         "difference":
-            difference,
+            round(
+                difference,
+                2,
+            ),
 
         "difference_percentage":
-            difference_percentage,
+            (
+                round(
+                    difference_percentage,
+                    2,
+                )
+                if difference_percentage
+                is not None
+                else None
+            ),
+
+        "categories":
+            categories,
+    }
+
+
+# ============================================================
+# Yearly report
+#
+# Used by the Insights page.
+#
+# Normal expenses:
+#     transaction_type == "expense"
+#
+# Investments:
+#     transaction_type == "investment"
+#
+# Reimbursable expenses:
+#     ignored for now
+#
+# Investments are NOT subtracted from income when
+# calculating net cash flow.
+# ============================================================
+
+@app.get(
+    "/reports/yearly",
+    response_model=schemas.YearlyReport,
+)
+def get_yearly_report(
+    year: int,
+    db: Session = Depends(get_db),
+):
+    start_date = datetime.date(
+        year,
+        1,
+        1,
+    )
+
+    end_date = datetime.date(
+        year + 1,
+        1,
+        1,
+    )
+
+
+    transactions = (
+        db.query(
+            models.Transaction
+        )
+        .filter(
+            models.Transaction.date
+            >= start_date,
+
+            models.Transaction.date
+            < end_date,
+        )
+        .all()
+    )
+
+
+    # --------------------------------------------------------
+    # Monthly containers
+    # --------------------------------------------------------
+
+    monthly_data = {
+        month: {
+            "income": 0.0,
+            "expenses": 0.0,
+            "investments": 0.0,
+        }
+
+        for month in range(
+            1,
+            13,
+        )
+    }
+
+
+    category_totals: dict[
+        str,
+        float,
+    ] = {}
+
+
+    total_income = 0.0
+    total_expenses = 0.0
+    total_investments = 0.0
+
+
+    months_with_data: set[
+        int
+    ] = set()
+
+
+    # --------------------------------------------------------
+    # Aggregate transactions
+    # --------------------------------------------------------
+
+    for transaction in (
+        transactions
+    ):
+        month = (
+            transaction.date.month
+        )
+
+        amount = float(
+            transaction.amount
+        )
+
+
+        months_with_data.add(
+            month
+        )
+
+
+        # ----------------------------------------------------
+        # Income
+        # ----------------------------------------------------
+
+        if (
+            transaction.transaction_type
+            == "income"
+        ):
+            total_income += amount
+
+            monthly_data[
+                month
+            ]["income"] += amount
+
+
+        # ----------------------------------------------------
+        # Normal expenses
+        # ----------------------------------------------------
+
+        elif (
+            transaction.transaction_type
+            == "expense"
+        ):
+            total_expenses += amount
+
+            monthly_data[
+                month
+            ]["expenses"] += amount
+
+
+            category_totals[
+                transaction.category
+            ] = (
+                category_totals.get(
+                    transaction.category,
+                    0.0,
+                )
+                + amount
+            )
+
+
+        # ----------------------------------------------------
+        # Investments
+        # ----------------------------------------------------
+
+        elif (
+            transaction.transaction_type
+            == "investment"
+        ):
+            total_investments += (
+                amount
+            )
+
+            monthly_data[
+                month
+            ]["investments"] += amount
+
+
+        # ----------------------------------------------------
+        # Reimbursable
+        #
+        # Deliberately ignored for now.
+        # ----------------------------------------------------
+
+        elif (
+            transaction.transaction_type
+            == "reimbursable"
+        ):
+            pass
+
+
+    # --------------------------------------------------------
+    # Annual summary
+    # --------------------------------------------------------
+
+    net_cash_flow = (
+        total_income
+        - total_expenses
+    )
+
+
+    savings_rate = (
+        net_cash_flow
+        / total_income
+        * 100
+        if total_income > 0
+        else None
+    )
+
+
+    # --------------------------------------------------------
+    # Only return months up to the latest month for
+    # which at least one transaction exists.
+    #
+    # This avoids showing future months as zero when
+    # looking at the current year.
+    # --------------------------------------------------------
+
+    last_month = (
+        max(
+            months_with_data
+        )
+        if months_with_data
+        else 0
+    )
+
+
+    months = []
+
+
+    for month in range(
+        1,
+        last_month + 1,
+    ):
+        income = (
+            monthly_data[
+                month
+            ]["income"]
+        )
+
+        expenses = (
+            monthly_data[
+                month
+            ]["expenses"]
+        )
+
+        investments = (
+            monthly_data[
+                month
+            ]["investments"]
+        )
+
+
+        months.append(
+            {
+                "month":
+                    month,
+
+                "income":
+                    round(
+                        income,
+                        2,
+                    ),
+
+                "expenses":
+                    round(
+                        expenses,
+                        2,
+                    ),
+
+                "net_cash_flow":
+                    round(
+                        income
+                        - expenses,
+                        2,
+                    ),
+
+                "investments":
+                    round(
+                        investments,
+                        2,
+                    ),
+            }
+        )
+
+
+    # --------------------------------------------------------
+    # Annual spending categories
+    #
+    # Only normal expenses are included.
+    # --------------------------------------------------------
+
+    categories = [
+        {
+            "category":
+                category,
+
+            "amount":
+                round(
+                    amount,
+                    2,
+                ),
+        }
+
+        for (
+            category,
+            amount,
+        ) in (
+            category_totals.items()
+        )
+    ]
+
+
+    categories.sort(
+        key=lambda item:
+            item["amount"],
+        reverse=True,
+    )
+
+
+    # --------------------------------------------------------
+    # Response
+    # --------------------------------------------------------
+
+    return {
+        "year":
+            year,
+
+        "income":
+            round(
+                total_income,
+                2,
+            ),
+
+        "expenses":
+            round(
+                total_expenses,
+                2,
+            ),
+
+        "net_cash_flow":
+            round(
+                net_cash_flow,
+                2,
+            ),
+
+        "savings_rate":
+            (
+                round(
+                    savings_rate,
+                    2,
+                )
+                if savings_rate
+                is not None
+                else None
+            ),
+
+        "investments":
+            round(
+                total_investments,
+                2,
+            ),
+
+        "months":
+            months,
 
         "categories":
             categories,
