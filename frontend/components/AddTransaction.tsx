@@ -4,9 +4,10 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { addTransaction } from "@/lib/api";
+import type { TransactionType } from "@/types/transaction";
 import {
+  CATEGORIES,
   EXPENSE_CATEGORIES,
-  INCOME_CATEGORIES,
 } from "@/lib/categories";
 
 
@@ -35,9 +36,7 @@ export default function AddTransaction() {
   const [
     transactionType,
     setTransactionType,
-  ] = useState<
-    "expense" | "income"
-  >("expense");
+  ] = useState<TransactionType>("expense");
 
   const [amount, setAmount] =
     useState("");
@@ -65,21 +64,19 @@ export default function AddTransaction() {
     useState<string | null>(null);
 
 
-  const categories =
-    transactionType === "expense"
-      ? EXPENSE_CATEGORIES
-      : INCOME_CATEGORIES;
+  const categories = CATEGORIES.filter(
+    (category) => category.kind === transactionType,
+  );
 
 
   function handleTypeChange(
-    type: "expense" | "income",
+    type: TransactionType,
   ) {
     setTransactionType(type);
 
-    const newCategories =
-      type === "expense"
-        ? EXPENSE_CATEGORIES
-        : INCOME_CATEGORIES;
+    const newCategories = CATEGORIES.filter(
+      (category) => category.kind === type,
+    );
 
     setCategory(
       newCategories[0]?.name ?? "",
@@ -240,8 +237,7 @@ export default function AddTransaction() {
                   handleTypeChange(
                     event.target
                       .value as
-                      | "expense"
-                      | "income",
+                      TransactionType,
                   )
                 }
                 className="
@@ -262,6 +258,14 @@ export default function AddTransaction() {
 
                 <option value="income">
                   Income
+                </option>
+
+                <option value="investment">
+                  Investment
+                </option>
+
+                <option value="reimbursable">
+                  Reimbursable expense
                 </option>
 
               </select>

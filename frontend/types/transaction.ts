@@ -1,8 +1,14 @@
+export type TransactionType =
+  | "expense"
+  | "income"
+  | "investment"
+  | "reimbursable";
+
 export type Transaction = {
   id: number;
   date: string;
   amount: number;
-  transaction_type: "expense" | "income";
+  transaction_type: TransactionType;
   category: string;
   description: string | null;
   created_at: string;
@@ -11,7 +17,7 @@ export type Transaction = {
 export type TransactionCreate = {
   date: string;
   amount: number;
-  transaction_type: "expense" | "income";
+  transaction_type: TransactionType;
   category: string;
   description: string | null;
 };

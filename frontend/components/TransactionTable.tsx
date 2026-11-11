@@ -9,13 +9,13 @@ import {
 } from "@/lib/api";
 
 import {
+  CATEGORIES,
   EXPENSE_CATEGORIES,
-  INCOME_CATEGORIES,
   getCategoryTagStyle,
 } from "@/lib/categories";
 
 import { formatAmount } from "@/lib/format";
-import { Transaction } from "@/types/transaction";
+import type { Transaction, TransactionType } from "@/types/transaction";
 
 
 type TransactionTableProps = {
@@ -66,9 +66,7 @@ export default function TransactionTable({
   const [
     transactionType,
     setTransactionType,
-  ] = useState<
-    "expense" | "income"
-  >("expense");
+  ] = useState<TransactionType>("expense");
 
 
   const [
@@ -92,10 +90,9 @@ export default function TransactionTable({
    *
    * These now come from lib/categories.ts.
    */
-  const categories =
-    transactionType === "expense"
-      ? EXPENSE_CATEGORIES
-      : INCOME_CATEGORIES;
+  const categories = CATEGORIES.filter(
+    (category) => category.kind === transactionType,
+  );
 
 
   function startEditing(
@@ -135,14 +132,13 @@ export default function TransactionTable({
 
 
   function handleTypeChange(
-    type: "expense" | "income",
+    type: TransactionType,
   ) {
     setTransactionType(type);
 
-    const newCategories =
-      type === "expense"
-        ? EXPENSE_CATEGORIES
-        : INCOME_CATEGORIES;
+    const newCategories = CATEGORIES.filter(
+      (category) => category.kind === type,
+    );
 
     setCategory(
       newCategories[0]?.name ?? "",
@@ -327,8 +323,7 @@ export default function TransactionTable({
                   handleTypeChange(
                     event.target
                       .value as
-                      | "expense"
-                      | "income",
+                      TransactionType,
                   )
                 }
                 className="
@@ -349,6 +344,14 @@ export default function TransactionTable({
 
                 <option value="income">
                   Income
+                </option>
+
+                <option value="investment">
+                  Investment
+                </option>
+
+                <option value="reimbursable">
+                  Reimbursable expense
                 </option>
 
               </select>
