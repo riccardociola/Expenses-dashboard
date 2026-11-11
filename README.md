@@ -10,7 +10,6 @@ A **local-first personal finance dashboard** built with Next.js, FastAPI and SQL
 - **Transaction management:** add, edit and delete transactions, with category-colored tags and a month selector.
 - **Yearly insights:** monthly income/expense/cash-flow trends, annual category breakdown, yearly summary and investment contributions.
 - **Separate transaction types:** `expense`, `income`, `investment` and `reimbursable`.
-- **Historical import:** a script for converting the original color-coded Excel workbook to SQLite (optional and tailored to that workbook).
 - **Demo mode:** prebuilt synthetic transactions for every month of 2026, or a blank database for starting from scratch.
 
 ### Reporting rules
@@ -25,7 +24,6 @@ Net cash flow and savings rate are currently calculated as **income minus ordina
 | Charts | Recharts |
 | Backend | FastAPI, SQLAlchemy, Pydantic |
 | Database | SQLite |
-| Historical import | Python, openpyxl |
 
 ## Getting started
 
@@ -91,40 +89,6 @@ python backend\scripts\seed_demo.py --kind demo --force
 
 The generator is deterministic and only writes inside `backend/samples/`.
 
-## Project structure
-
-```text
-expenses-dashboard/
-├── backend/
-│   ├── app/                 # API, models, schemas, database connection
-│   ├── data/                # Private, ignored local expenses.db
-│   ├── samples/             # Published empty.db and synthetic demo.db
-│   ├── scripts/             # Demo generator and historical Excel importer
-│   └── requirements.txt
-├── frontend/
-│   ├── app/                 # Monthly dashboard and /insights route
-│   ├── components/          # Forms, cards, tables and Recharts charts
-│   ├── lib/                 # API client, money formatting, categories
-│   └── types/               # TypeScript API types
-├── start_expenses.bat       # Optional Windows launcher
-├── .gitignore
-└── README.md
-```
-
-## Transaction categories and the Excel importer
-
-Categories and their display colors are configured in `frontend/lib/categories.ts`. Only ordinary expenses appear in the spending pie; investments and reimbursable costs remain accessible as transactions and are treated separately.
-
-The optional importer is **specific to the author's previous Excel layout** (monthly sheets, color-coded transaction cells, a legend on every sheet, and historical income cells). It is not a general-purpose Excel/CSV importer. Review the category mapping in `backend/scripts/import_history.py` before use.
-
-```powershell
-# Preview only: does not write to SQLite
-python backend\scripts\import_history.py "path\to\Expenses.xlsx"
-
-# Import after reviewing the preview and backing up your local DB
-python backend\scripts\import_history.py "path\to\Expenses.xlsx" --commit
-```
-
 ## Data privacy and publishing
 
 - The active database **must remain** at `backend/data/expenses.db` (ignored by Git).
@@ -143,4 +107,4 @@ python backend\scripts\import_history.py "path\to\Expenses.xlsx" --commit
 
 ## License
 
-No open-source license has been selected yet. Add a `LICENSE` file if you want to allow others to reuse or redistribute the code under defined terms.
+Released under the [MIT License](LICENSE). You are welcome to use, modify, and redistribute the code under its terms.
